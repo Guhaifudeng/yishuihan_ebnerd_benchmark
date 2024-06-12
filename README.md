@@ -1,6 +1,6 @@
 # 参考项目
-https://github.com/yamanalab/gpt-augmented-news-recommendation
-https://github.com/ebanalyse/ebnerd-benchmark
+- https://github.com/yamanalab/gpt-augmented-news-recommendation
+- https://github.com/ebanalyse/ebnerd-benchmark
 
 # 核心代码
 ```
