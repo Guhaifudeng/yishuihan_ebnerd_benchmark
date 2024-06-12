@@ -18,7 +18,7 @@ class NRMS(nn.Module):
         self.loss_fn = loss_fn
 
     def forward(
-        self, candidate_news: torch.Tensor, news_histories: torch.Tensor, user_id: torch.Tensor, target: torch.Tensor
+        self, candidate_news: torch.Tensor, news_histories: torch.Tensor, user_id: torch.Tensor, target: torch.Tensor =None
     ) -> torch.Tensor:
         """
         Parameters

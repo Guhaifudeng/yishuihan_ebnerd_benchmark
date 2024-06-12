@@ -1,9 +1,11 @@
+
 import torch
 from torch import nn
 from transformers import AutoConfig, AutoModel
 
-from recommendation.common_layers.AdditiveAttention import AdditiveAttention
-
+from ebrec.models.newsrecv2.recommendation.common_layers.AdditiveAttention import AdditiveAttention
+from ebrec.utils.log_util import init_logger
+logging = init_logger(__name__)
 
 class PLMBasedNewsEncoder(nn.Module):
     def __init__(
@@ -14,6 +16,7 @@ class PLMBasedNewsEncoder(nn.Module):
     ):
         super().__init__()
         self.plm = AutoModel.from_pretrained(pretrained)
+        logging.info(self.plm)
 
         plm_hidden_size = AutoConfig.from_pretrained(pretrained).hidden_size
 

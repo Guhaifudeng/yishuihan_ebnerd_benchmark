@@ -85,7 +85,7 @@ TEST_COLUMNS = [
     DEFAULT_IMPRESSION_ID_COL,
 ]
 HISTORY_SIZE = 30
-FRACTION = 0.01
+FRACTION = 1.0
 
 df_train = (
     ebnerd_from_path(PATH.joinpath(DATASPLIT, "train"), history_size=HISTORY_SIZE)
@@ -98,7 +98,7 @@ df_train = (
         seed=123,
     )
     .pipe(create_binary_labels_column)
-    .sample(fraction=0.01)
+    .sample(fraction=FRACTION)
 )
 
 df_val = (
@@ -112,7 +112,7 @@ df_val = (
         seed=123,
     )
     .pipe(create_binary_labels_column)
-    .sample(fraction=0.01)
+    .sample(fraction=0.3)
 )
 # df_train, df_val = split_df(df_training, 0.8)
 
@@ -199,9 +199,9 @@ print('finished build loader')
 # => CALLBACKS
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=LOG_DIR, histogram_freq=1)
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=2)
-modelcheckpoint = tf.keras.callbacks.ModelCheckpoint(
-    filepath=MODEL_WEIGHTS, save_best_only=True, save_weights_only=True, verbose=1
-)
+# modelcheckpoint = tf.keras.callbacks.ModelCheckpoint(
+#     filepath=MODEL_WEIGHTS, save_best_only=True, save_weights_only=True, verbose=1
+# )
 print('starting build model')
 hparams_nrms.history_size = HISTORY_SIZE
 model = NRMSModel(
@@ -211,13 +211,13 @@ model = NRMSModel(
 )
 print('finished build model')
 print('start training')
-hist = model.model.fit(
-    train_loader,
-    validation_data=val_loader,
-    epochs=2,
-    callbacks=[tensorboard_callback, early_stopping,modelcheckpoint],
-)
-print('finish training')
+# hist = model.model.fit(
+#     train_loader,
+#     validation_data=val_loader,
+#     epochs=2,
+#     callbacks=[tensorboard_callback, early_stopping],
+# )
+# print('finish training')
 # =>
 # print('start val predict')
 # pred_validation = model.scorer.predict(val_loader)

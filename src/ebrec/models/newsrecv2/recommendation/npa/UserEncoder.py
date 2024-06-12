@@ -1,5 +1,5 @@
 import torch
-from recommendation.common_layers.PersonalizedAttention import PersonalizedAttention
+from ebrec.models.newsrecv2.recommendation.common_layers.PersonalizedAttention import PersonalizedAttention
 from torch import nn
 
 

@@ -1,5 +1,5 @@
 import torch
-from recommendation.common_layers.AdditiveAttention import AdditiveAttention
+from ebrec.models.newsrecv2.recommendation.common_layers.AdditiveAttention import AdditiveAttention
 from torch import nn
 
 

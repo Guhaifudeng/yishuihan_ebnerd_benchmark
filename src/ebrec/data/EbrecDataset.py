@@ -5,7 +5,10 @@ import numpy as np
 import polars as pl
 import torch
 from torch.utils.data import Dataset
-from utils.list import uniq
+from ebrec.utils.log_util import init_logger
+from ebrec.utils.list import uniq
+
+logging = init_logger(__name__)
 
 from ebrec.utils._constants import EMPTY_IMPRESSION_IDX, EMPTY_NEWS_ID
 
@@ -14,6 +17,18 @@ from pathlib import Path
 import tensorflow as tf
 import polars as pl
 import os
+from ebrec.utils._constants import (
+    DEFAULT_HISTORY_ARTICLE_ID_COL,
+    DEFAULT_CLICKED_ARTICLES_COL,
+    DEFAULT_INVIEW_ARTICLES_COL,
+    DEFAULT_IMPRESSION_ID_COL,
+    DEFAULT_SUBTITLE_COL,
+    DEFAULT_LABELS_COL,
+    DEFAULT_ARTICLE_ID_COL,
+    DEFAULT_TITLE_COL,
+    DEFAULT_USER_COL,
+    DEFAULT_CATEGORY_COL
+)
 
 class EbrecTrainDataset(Dataset):
     def __init__(
@@ -22,15 +37,11 @@ class EbrecTrainDataset(Dataset):
         news_df: pl.DataFrame,
         user_ids_to_idx_map: dict[str, int],
         batch_transform_texts: Callable[[list[str]], torch.Tensor],
-        npratio: int,
-        history_size: int,
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     ) -> None:
         self.behavior_df: pl.DataFrame = behavior_df
         self.news_df: pl.DataFrame = news_df
         self.batch_transform_texts: Callable[[list[str]], torch.Tensor] = batch_transform_texts
-        self.npratio: int = npratio
-        self.history_size: int = history_size
         self.device: torch.device = device
 
         # self.behavior_df = self.behavior_df.with_columns(
@@ -45,7 +56,7 @@ class EbrecTrainDataset(Dataset):
         # )
 
         self.__news_id_to_title_map: dict[str, str] = {
-            self.news_df[i]["news_id"].item(): self.news_df[i]["title"].item() for i in range(len(self.news_df))
+            self.news_df[i][DEFAULT_ARTICLE_ID_COL].item(): self.news_df[i][DEFAULT_TITLE_COL].item() for i in range(len(self.news_df))
         }
         self.__news_id_to_title_map[EMPTY_NEWS_ID] = ""
         self.__user_ids_to_idx_map = user_ids_to_idx_map
@@ -57,44 +68,10 @@ class EbrecTrainDataset(Dataset):
             torch.Tensor: candidate_news
             torch.Tensor: labels
         """
-        # Extract Values
         behavior_item = self.behavior_df[behavior_idx]
-
-        history: list[str] = (
-            behavior_item["history"].to_list()[0] if behavior_item["history"].to_list()[0] is not None else []
-        )  # TODO: Consider Remove if "history" is None
-        poss_idxes, neg_idxes = (
-            behavior_item["clicked_idxes"].to_list()[0],
-            behavior_item["non_clicked_idxes"].to_list()[0],
-        )
-        EMPTY_IMPRESSION = {"news_id": EMPTY_NEWS_ID, "clicked": 0}
-        impressions = np.array(
-            behavior_item["impressions"].to_list()[0] + [EMPTY_IMPRESSION]
-        )  # NOTE: EMPTY_IMPRESSION_IDX = -1なので最後尾に追加する。
-
-        poss_idxes, neg_idxes = (
-            behavior_item["clicked_idxes"].to_list()[0],
-            behavior_item["non_clicked_idxes"].to_list()[0],
-        )
-
-        # Sampling Positive(clicked) & Negative(non-clicked) Sample
-        sample_poss_idxes, sample_neg_idxes = (
-            random.sample(poss_idxes, 1),
-            self.__sampling_negative(neg_idxes, self.npratio),
-        )
-
-        sample_impression_idxes = sample_poss_idxes + sample_neg_idxes
-        random.shuffle(sample_impression_idxes)
-
-        sample_impressions = impressions[sample_impression_idxes]
-
-        # Extract candidate_news & history_news based on sample idxes
-        candidate_news_ids = [imp_item["news_id"] for imp_item in sample_impressions]
-        labels = [imp_item["clicked"] for imp_item in sample_impressions]
-        history_news_ids = history[: self.history_size]  # TODO: diverse
-        if len(history) < self.history_size:
-            history_news_ids = history_news_ids + [EMPTY_NEWS_ID] * (self.history_size - len(history))
-
+        history_news_ids = behavior_item[DEFAULT_HISTORY_ARTICLE_ID_COL].to_list()[0]
+        candidate_news_ids = behavior_item[DEFAULT_INVIEW_ARTICLES_COL].to_list()[0]
+        labels = behavior_item[DEFAULT_LABELS_COL].to_list()[0]
         # News ID to News Title
         candidate_news_titles, history_news_titles = (
             [self.__news_id_to_title_map[news_id] for news_id in candidate_news_ids],
@@ -109,9 +86,8 @@ class EbrecTrainDataset(Dataset):
         labels_tensor = torch.Tensor(labels).argmax()
 
         # user_id
-        user_id = self.__user_ids_to_idx_map[behavior_item["user_id"].to_list()[0]]
+        user_id = behavior_item[DEFAULT_USER_COL].to_list()[0]
 
-        # ref: NRMS.forward in src/recommendation/nrms/NRMS.py
         return {
             "news_histories": history_news_tensor,
             "candidate_news": candidate_news_tensor,
@@ -122,17 +98,10 @@ class EbrecTrainDataset(Dataset):
     def __len__(self) -> int:
         return len(self.behavior_df)
 
-    def __sampling_negative(self, neg_idxes: list[int], npratio: int) -> list[int]:
-        if len(neg_idxes) < npratio:
-            return neg_idxes + [EMPTY_IMPRESSION_IDX] * (npratio - len(neg_idxes))
-
-        return random.sample(neg_idxes, self.npratio)
-
     def get_user_num(self, only_train: bool = False) -> int:
         if only_train:
             return len(uniq(self.behavior_df["user_id"].to_list()))
         return len(self.__user_ids_to_idx_map)
-
 
 class EbrecValDataset(Dataset):
     def __init__(
@@ -141,17 +110,16 @@ class EbrecValDataset(Dataset):
         news_df: pl.DataFrame,
         user_ids_to_idx_map: dict[str, int],
         batch_transform_texts: Callable[[list[str]], torch.Tensor],
-        history_size: int,
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     ) -> None:
         self.behavior_df: pl.DataFrame = behavior_df
         self.news_df: pl.DataFrame = news_df
         self.batch_transform_texts: Callable[[list[str]], torch.Tensor] = batch_transform_texts
-        self.history_size: int = history_size
         self.device: torch.device = device
 
         self.__news_id_to_title_map: dict[str, str] = {
-            self.news_df[i]["news_id"].item(): self.news_df[i]["title"].item() for i in range(len(self.news_df))
+            self.news_df[i][DEFAULT_ARTICLE_ID_COL].item(): self.news_df[i][DEFAULT_TITLE_COL].item() for i in
+            range(len(self.news_df))
         }
         self.__news_id_to_title_map[EMPTY_NEWS_ID] = ""
         self.__user_ids_to_idx_map = user_ids_to_idx_map
@@ -163,23 +131,10 @@ class EbrecValDataset(Dataset):
             torch.Tensor: candidate_news
             torch.Tensor: one-hot labels
         """
-        # Extract Values
         behavior_item = self.behavior_df[behavior_idx]
-
-        history: list[str] = (
-            behavior_item["history"].to_list()[0] if behavior_item["history"].to_list()[0] is not None else []
-        )  # TODO: Consider Remove if "history" is None
-        EMPTY_IMPRESSION = {"news_id": EMPTY_NEWS_ID, "clicked": 0}
-        impressions = np.array(
-            behavior_item["impressions"].to_list()[0] + [EMPTY_IMPRESSION]
-        )  # NOTE: EMPTY_IMPRESSION_IDX = -1なので最後尾に追加する。
-
-        # Extract candidate_news & history_news based on sample idxes
-        candidate_news_ids = [imp_item["news_id"] for imp_item in impressions]
-        labels = [imp_item["clicked"] for imp_item in impressions]
-        history_news_ids = history[: self.history_size]  # TODO: diverse
-        if len(history) < self.history_size:
-            history_news_ids = history_news_ids + [EMPTY_NEWS_ID] * (self.history_size - len(history))
+        history_news_ids = behavior_item[DEFAULT_HISTORY_ARTICLE_ID_COL].to_list()[0]
+        candidate_news_ids = behavior_item[DEFAULT_INVIEW_ARTICLES_COL].to_list()[0]
+        labels = behavior_item[DEFAULT_LABELS_COL].to_list()[0]
 
         # News ID to News Title
         candidate_news_titles, history_news_titles = (
@@ -195,13 +150,14 @@ class EbrecValDataset(Dataset):
         one_hot_label_tensor = torch.Tensor(labels)
 
         # user_id
-        user_id = self.__user_ids_to_idx_map[behavior_item["user_id"].to_list()[0]]
+        user_id = behavior_item[DEFAULT_USER_COL].to_list()[0]
 
         return {
             "news_histories": history_news_tensor,
             "candidate_news": candidate_news_tensor,
             "user_id": user_id,
             "target": one_hot_label_tensor,
+            # "labels":labels
         }
 
     def __len__(self) -> int:
@@ -216,17 +172,16 @@ class EbrecTestDataset(Dataset):
         news_df: pl.DataFrame,
         user_ids_to_idx_map: dict[str, int],
         batch_transform_texts: Callable[[list[str]], torch.Tensor],
-        history_size: int,
         device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     ) -> None:
         self.behavior_df: pl.DataFrame = behavior_df
         self.news_df: pl.DataFrame = news_df
         self.batch_transform_texts: Callable[[list[str]], torch.Tensor] = batch_transform_texts
-        self.history_size: int = history_size
         self.device: torch.device = device
 
         self.__news_id_to_title_map: dict[str, str] = {
-            self.news_df[i]["news_id"].item(): self.news_df[i]["title"].item() for i in range(len(self.news_df))
+            self.news_df[i][DEFAULT_ARTICLE_ID_COL].item(): self.news_df[i][DEFAULT_TITLE_COL].item() for i in
+            range(len(self.news_df))
         }
         self.__news_id_to_title_map[EMPTY_NEWS_ID] = ""
         self.__user_ids_to_idx_map = user_ids_to_idx_map
@@ -238,23 +193,10 @@ class EbrecTestDataset(Dataset):
             torch.Tensor: candidate_news
             torch.Tensor: one-hot labels
         """
-        # Extract Values
         behavior_item = self.behavior_df[behavior_idx]
-
-        history: list[str] = (
-            behavior_item["history"].to_list()[0] if behavior_item["history"].to_list()[0] is not None else []
-        )  # TODO: Consider Remove if "history" is None
-        EMPTY_IMPRESSION = {"news_id": EMPTY_NEWS_ID, "clicked": 0}
-        impressions = np.array(
-            behavior_item["impressions"].to_list()[0] + [EMPTY_IMPRESSION]
-        )  # NOTE: EMPTY_IMPRESSION_IDX = -1
-
-        # Extract candidate_news & history_news based on sample idxes
-        candidate_news_ids = [imp_item["news_id"] for imp_item in impressions]
-        #labels = [imp_item["clicked"] for imp_item in impressions]
-        history_news_ids = history[: self.history_size]  # TODO: diverse
-        if len(history) < self.history_size:
-            history_news_ids = history_news_ids + [EMPTY_NEWS_ID] * (self.history_size - len(history))
+        history_news_ids = behavior_item[DEFAULT_HISTORY_ARTICLE_ID_COL].to_list()[0]
+        candidate_news_ids = behavior_item[DEFAULT_INVIEW_ARTICLES_COL].to_list()[0]
+        # labels = behavior_item[DEFAULT_LABELS_COL]
 
         # News ID to News Title
         candidate_news_titles, history_news_titles = (
@@ -267,10 +209,10 @@ class EbrecTestDataset(Dataset):
             self.batch_transform_texts(candidate_news_titles),
             self.batch_transform_texts(history_news_titles),
         )
-        #one_hot_label_tensor = torch.Tensor(labels)
+        # one_hot_label_tensor = torch.Tensor(labels)
 
         # user_id
-        user_id = self.__user_ids_to_idx_map[behavior_item["user_id"].to_list()[0]]
+        user_id = behavior_item[DEFAULT_USER_COL].to_list()[0]
 
         return {
             "news_histories": history_news_tensor,
@@ -287,10 +229,9 @@ if __name__ == "__main__":
 
     from torch.utils.data import DataLoader
     from transformers import AutoTokenizer
-    from utils.logger import logging
-    from utils.random_seed import set_random_seed
+    from ebrec.utils.random_seed import set_random_seed
 
-    from ebrec.models.newsrecv2.dataframe import read_behavior_df, read_news_df, create_user_ids_to_idx_map
+    from ebrec.data.dataframe import read_behavior_df, read_news_df, create_user_ids_to_idx_map
 
     set_random_seed(42)
 
@@ -302,10 +243,10 @@ if __name__ == "__main__":
 
 
     Ebrec_SMALL_TRAIN_DATASET_DIR = '/data/badou/new_data/ebnerd/ebnerd_small/train'
-    Ebrec_SMALL_VAL_DATASET_DIR =  ''
+    Ebrec_SMALL_VAL_DATASET_DIR =  '/data/badou/new_data/ebnerd/ebnerd_small/validation'
     Ebrec_SMALL_News_DATASET_DIR = '/data/badou/new_data/ebnerd/ebnerd_small/'
     logging.info("Load Data")
-    train_behavior_df = read_behavior_df(Path(Ebrec_SMALL_TRAIN_DATASET_DIR,is_test= False))
+    train_behavior_df = read_behavior_df(Path(Ebrec_SMALL_TRAIN_DATASET_DIR),mode= 'train')
     news_df = read_news_df(Path(Ebrec_SMALL_News_DATASET_DIR))
     # train_behavior_df, train_news_df = (
     #     read_behavior_df(Ebrec_SMALL_TRAIN_DATASET_DIR),
@@ -313,7 +254,9 @@ if __name__ == "__main__":
     # )
     # val_behavior_df = read_behavior_df(Ebrec_SMALL_VAL_DATASET_DIR / "behaviors.tsv")
     #
-    val_behavior_df = read_behavior_df(Path(Ebrec_SMALL_VAL_DATASET_DIR, is_test=True))
+    val_behavior_df = read_behavior_df(Path(Ebrec_SMALL_VAL_DATASET_DIR),mode='test')
+
+
     user_ids_to_idx_map = create_user_ids_to_idx_map(train_behavior_df, val_behavior_df)
     #
     # logging.info("Init EbrecTrainDataset")
@@ -321,11 +264,9 @@ if __name__ == "__main__":
         train_behavior_df,
         news_df,
         user_ids_to_idx_map,
-        batch_transform_texts=transform,
-        npratio=4,
-        history_size=20,
+        batch_transform_texts=transform
     )
-    train_dataloader = DataLoader(train_dataset, batch_size=5, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
     logging.info("Start Iteration")
     for batch in train_dataloader:
         logging.info(f"{batch}")
