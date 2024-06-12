@@ -27,6 +27,7 @@ class NewsrecDataLoader(tf.keras.utils.Sequence):
     article_dict: dict[int, any]
     unknown_representation: str
     eval_mode: bool = False
+    test_mode: bool = False
     batch_size: int = 32
     inview_col: str = DEFAULT_INVIEW_ARTICLES_COL
     labels_col: str = DEFAULT_LABELS_COL
@@ -55,7 +56,10 @@ class NewsrecDataLoader(tf.keras.utils.Sequence):
         X = self.behaviors.drop(self.labels_col).with_columns(
             pl.col(self.inview_col).list.len().alias("n_samples")
         )
-        y = self.behaviors[self.labels_col]
+        if not self.test_mode:
+            y = self.behaviors[self.labels_col]
+        else:
+            y = None
         return X, y
 
     def set_kwargs(self, kwargs: dict):
@@ -150,12 +154,43 @@ class NRMSDataLoaderPretransform(NewsrecDataLoader):
         batch_y:            (samples, npratio)
         """
         batch_X = self.X[idx * self.batch_size : (idx + 1) * self.batch_size]
-        batch_y = self.y[idx * self.batch_size : (idx + 1) * self.batch_size]
-        # =>
-        if self.eval_mode:
+        if not self.test_mode:
+            batch_y = self.y[idx * self.batch_size : (idx + 1) * self.batch_size]
+
+            # =>
+            if self.eval_mode:
+                repeats = np.array(batch_X["n_samples"])
+                # =>
+                batch_y = np.array(batch_y.explode().to_list()).reshape(-1, 1)
+                # print('batch_y',batch_y.shape)
+                # =>
+                his_input_title = repeat_by_list_values_from_matrix(
+                    batch_X[self.history_column].to_list(),
+                    matrix=self.lookup_article_matrix,
+                    repeats=repeats,
+                )
+                # =>
+                pred_input_title = self.lookup_article_matrix[
+                    batch_X[self.inview_col].explode().to_list()
+                ]
+                # print('his_input_title', his_input_title.shape)
+                # print('his_input_title', his_input_title.shape)
+            else:
+                batch_y = np.array(batch_y.to_list())
+                his_input_title = self.lookup_article_matrix[
+                    batch_X[self.history_column].to_list()
+                ]
+                pred_input_title = self.lookup_article_matrix[
+                    batch_X[self.inview_col].to_list()
+                ]
+                pred_input_title = np.squeeze(pred_input_title, axis=2)
+
+            his_input_title = np.squeeze(his_input_title, axis=2)
+            return (his_input_title, pred_input_title), batch_y
+        else:
             repeats = np.array(batch_X["n_samples"])
             # =>
-            batch_y = np.array(batch_y.explode().to_list()).reshape(-1, 1)
+            # batch_y = np.array(batch_y.explode().to_list()).reshape(-1, 1)
             # =>
             his_input_title = repeat_by_list_values_from_matrix(
                 batch_X[self.history_column].to_list(),
@@ -166,21 +201,10 @@ class NRMSDataLoaderPretransform(NewsrecDataLoader):
             pred_input_title = self.lookup_article_matrix[
                 batch_X[self.inview_col].explode().to_list()
             ]
-        else:
-            batch_y = np.array(batch_y.to_list())
-            his_input_title = self.lookup_article_matrix[
-                batch_X[self.history_column].to_list()
-            ]
-            pred_input_title = self.lookup_article_matrix[
-                batch_X[self.inview_col].to_list()
-            ]
-            pred_input_title = np.squeeze(pred_input_title, axis=2)
+            his_input_title = np.squeeze(his_input_title, axis=2)
+            return (his_input_title, pred_input_title), np.zeros(shape=(his_input_title.shape[0],1))
 
-        his_input_title = np.squeeze(his_input_title, axis=2)
-        return (his_input_title, pred_input_title), batch_y
-
-
-@dataclass(kw_only=True)
+@dataclass
 class LSTURDataLoader(NewsrecDataLoader):
     """
     NPA and LSTUR shares the same DataLoader
@@ -263,7 +287,7 @@ class LSTURDataLoader(NewsrecDataLoader):
         return (user_indexes, his_input_title, pred_input_title), batch_y
 
 
-@dataclass(kw_only=True)
+@dataclass
 class NAMLDataLoader(NewsrecDataLoader):
     """
     Eval mode not implemented
