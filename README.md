@@ -1,6 +1,6 @@
 # 参考项目
-- https://github.com/yamanalab/gpt-augmented-news-recommendation
-- https://github.com/ebanalyse/ebnerd-benchmark
+- https://github.com/yamanalab/gpt-augmented-news-recommendation (pytorch 版本的新闻推荐模型，使用了其中的models)
+- https://github.com/ebanalyse/ebnerd-benchmark (官方baseline-tf keras实现)
 
 # 核心代码
 ```
