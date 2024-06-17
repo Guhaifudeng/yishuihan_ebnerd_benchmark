@@ -12,7 +12,7 @@ import polars as pl
 from ebrec.utils.log_util import init_logger
 logging = init_logger(__name__)
 UNKNOWN_USER_IDX = -1
-# from const.mind import UNKNOWN_USER_IDX
+# from const.EBREC import UNKNOWN_USER_IDX
 #
 #
 # def _cache_dataframe(fn: Callable) -> Callable:
@@ -89,9 +89,61 @@ TEST_COLUMNS = [
     # DEFAULT_CLICKED_ARTICLES_COL,
     DEFAULT_IMPRESSION_ID_COL,
 ]
+def read_train_dev_behavior_df(train_dev_data_path: Path, history_size=30, mode = None,limit_size = None) -> pl.DataFrame:
+    def ebnerd_from_path(path: Path, history_size: int = 30) -> pl.DataFrame:
+        logging.info('ebnerd_from_path start. {}'.format(path))
+        """
+        Load ebnerd - function
+        """
+        train_history_path = path.joinpath('train').joinpath("history.parquet")
+        dev_history_path = path.joinpath('validation').joinpath("history.parquet")
+        df_history = pl.concat([pl.scan_parquet(train_history_path), pl.scan_parquet(dev_history_path)])
+
+        train_behaviors_path = path.joinpath('train').joinpath("behaviors.parquet")
+        dev_behaviors_path = path.joinpath('validation').joinpath("behaviors.parquet")
+        df_behaviors = pl.concat([pl.scan_parquet(train_behaviors_path), pl.scan_parquet(dev_behaviors_path)])
+
+        df_history = (
+            df_history
+            .select(DEFAULT_USER_COL, DEFAULT_HISTORY_ARTICLE_ID_COL)
+            .pipe(
+                truncate_history,
+                column=DEFAULT_HISTORY_ARTICLE_ID_COL,
+                history_size=history_size,
+                padding_value=0,
+                enable_warning=False,
+            )
+        )
+        df_behaviors = (
+            df_behaviors
+            .collect()
+            .pipe(
+                slice_join_dataframes,
+                df2=df_history.collect(),
+                on=DEFAULT_USER_COL,
+                how="left",
+            )
+        )
+        logging.info(df_behaviors[0])
+        logging.info('ebnerd_from_path finished. {}'.format(path))
+
+        return df_behaviors
+    logging.info('mode {}'.format(mode))
+    behavior_df = (ebnerd_from_path(train_dev_data_path, history_size=history_size).select(COLUMNS))
+    if limit_size:
+        behavior_df = behavior_df.limit(limit_size)
+    behavior_df = (behavior_df.pipe(
+        sampling_strategy_wu2019,
+        npratio=4,
+        shuffle=True,
+        with_replacement=True,
+        seed=123,).pipe(create_binary_labels_column))
+
+    logging.info(behavior_df[0])
+    return behavior_df
 
 
-def read_behavior_df(data_path: Path, history_size=30, mode = None) -> pl.DataFrame:
+def read_behavior_df(data_path: Path, history_size=30, mode = None,limit_size = None) -> pl.DataFrame:
     def ebnerd_from_path(path: Path, history_size: int = 30) -> pl.DataFrame:
         logging.info('ebnerd_from_path start. {}'.format(path))
         """
@@ -125,6 +177,8 @@ def read_behavior_df(data_path: Path, history_size=30, mode = None) -> pl.DataFr
     logging.info('mode {}'.format(mode))
     if mode == 'train':
         behavior_df = (ebnerd_from_path(data_path, history_size=history_size).select(COLUMNS))
+        if limit_size:
+            behavior_df = behavior_df.sample(n=limit_size,seed=1234)
         behavior_df = (behavior_df.pipe(
             sampling_strategy_wu2019,
             npratio=4,
@@ -135,6 +189,8 @@ def read_behavior_df(data_path: Path, history_size=30, mode = None) -> pl.DataFr
         behavior_df = (ebnerd_from_path(data_path, history_size=history_size).select(TEST_COLUMNS))
     else:
         behavior_df = (ebnerd_from_path(data_path, history_size=history_size).select(COLUMNS))
+        if limit_size:
+            behavior_df = behavior_df.sample(n=limit_size,seed=1234)
         behavior_df = (behavior_df.pipe(create_binary_labels_column))
 
     # behavior_df = behavior_df.rename(

@@ -46,7 +46,7 @@ def rank_predictions_by_score(
     2 for second highest, etc.), effectively ranking prediction scores for each row.
 
     Reference:
-        https://github.com/recommenders-team/recommenders/blob/main/examples/00_quick_start/nrms_MIND.ipynb
+        https://github.com/recommenders-team/recommenders/blob/main/examples/00_quick_start/nrms_EBREC.ipynb
 
     >>> prediction_scores = [[0.2, 0.1, 0.3], [0.1, 0.2], [0.4, 0.2, 0.1, 0.3]]
     >>> [rank_predictions_by_score(row) for row in prediction_scores]
@@ -67,10 +67,10 @@ def write_submission_file(
     filename_zip: str = None,
 ) -> None:
     """
-    We align the submission file similar to MIND-format for users who are familar.
+    We align the submission file similar to EBREC-format for users who are familar.
 
     Reference:
-        https://github.com/recommenders-team/recommenders/blob/main/examples/00_quick_start/nrms_MIND.ipynb
+        https://github.com/recommenders-team/recommenders/blob/main/examples/00_quick_start/nrms_EBREC.ipynb
 
     Example:
     >>> impression_ids = [237, 291, 320]

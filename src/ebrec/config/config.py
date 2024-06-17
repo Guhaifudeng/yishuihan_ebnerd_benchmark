@@ -9,8 +9,8 @@ class TrainConfig:
     random_seed: int = 42
     pretrained: str = "/home/dev/models/bce-embedding-base_v1"
     npratio: int = 4
-    history_size: int = 4
-    batch_size: int = 1
+    history_size: int = 30
+    batch_size: int = 16
     gradient_accumulation_steps: int = 8  # batch_size = 16 x 8 = 128
     epochs: int = 3
     learning_rate: float = 1e-4

@@ -10,7 +10,7 @@ from ebrec.utils.list import uniq
 
 logging = init_logger(__name__)
 
-from ebrec.utils._constants import EMPTY_IMPRESSION_IDX, EMPTY_NEWS_ID
+from ebrec.utils._constants import EMPTY_NEWS_ID
 
 from transformers import AutoTokenizer, AutoModel
 from pathlib import Path

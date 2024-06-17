@@ -17,7 +17,6 @@ class PLMBasedNewsEncoder(nn.Module):
         super().__init__()
         self.plm = AutoModel.from_pretrained(pretrained)
         logging.info(self.plm)
-
         plm_hidden_size = AutoConfig.from_pretrained(pretrained).hidden_size
 
         self.multihead_attention = nn.MultiheadAttention(
@@ -26,7 +25,10 @@ class PLMBasedNewsEncoder(nn.Module):
         self.additive_attention = AdditiveAttention(plm_hidden_size, additive_attn_hidden_dim)
 
     def forward(self, input_val: torch.Tensor) -> torch.Tensor:
-        V = self.plm(input_val).last_hidden_state  # [batch_size, seq_len] -> [batch_size, seq_len, hidden_size]
+        V = self.plm.embeddings(input_val)
+        # logging.info(V.shape)
+        # V = V.last_hidden_state  # [batch_size, seq_len] -> [batch_size, seq_len, hidden_size]
+
         multihead_attn_output, _ = self.multihead_attention(
             V, V, V
         )  # [batch_size, seq_len, hidden_size] -> [batch_size, seq_len, hidden_size]
@@ -36,5 +38,6 @@ class PLMBasedNewsEncoder(nn.Module):
         output = torch.sum(
             additive_attn_output, dim=1
         )  # [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
+
 
         return output

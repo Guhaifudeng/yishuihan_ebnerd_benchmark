@@ -30,8 +30,8 @@ class RecEvaluator:
     def dcg_score(cls, y_true: np.ndarray, y_score: np.ndarray, K: int = 5) -> float:
         # NOTE:
         # 本来なら、"discounts = np.concatenate([np.array([1]), np.log2(np.arange(len(y_true)-1)+3)], 0)"として
-        # 計算するべきだが、MINDの公式実装に合わせて、このように実装する。
-        # ref(MIND Official): https://github.com/msnews/MIND/blob/master/evaluate.py#L7-L12
+        # 計算するべきだが、EBRECの公式実装に合わせて、このように実装する。
+        # ref(EBREC Official): https://github.com/msnews/EBREC/blob/master/evaluate.py#L7-L12
         # ref(sklearn): https://github.com/scikit-learn/scikit-learn/blob/7f9bad99d6e0a3e8ddf92a7e5561245224dab102/sklearn/metrics/_ranking.py#L1444-L1458
 
         discounts = np.log2(np.arange(len(y_true)) + 2)[:K]

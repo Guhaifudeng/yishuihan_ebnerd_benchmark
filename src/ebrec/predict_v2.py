@@ -1,5 +1,6 @@
 import json
 import os
+os.environ['POLARS_MAX_THREADS'] = "8"
 from pathlib import Path
 
 import hydra
@@ -8,6 +9,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
 from transformers import (
     AutoConfig,
     AutoTokenizer,
@@ -23,8 +25,8 @@ from datetime import datetime
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 from ebrec.config.config import TrainConfig
-from ebrec.config.path import LOG_OUTPUT_DIR, MIND_SMALL_TRAIN_DATASET_DIR, MIND_SMALL_VAL_DATASET_DIR, \
-    MODEL_OUTPUT_DIR, MIND_SMALL_DATASET_DIR, MIND_LARGE_DATASET_DIR, MIND_TEST_DATASET_DIR
+from ebrec.config.path import LOG_OUTPUT_DIR, EBREC_SMALL_TRAIN_DATASET_DIR, EBREC_SMALL_VAL_DATASET_DIR, \
+    MODEL_OUTPUT_DIR, EBREC_SMALL_DATASET_DIR, EBREC_LARGE_DATASET_DIR, EBREC_TEST_DATASET_DIR
 from ebrec.evaluation.RecEvaluator import RecEvaluator, RecMetrics
 from ebrec.data.EbrecDataset import EbrecTrainDataset,EbrecValDataset,EbrecTestDataset
 
@@ -123,9 +125,9 @@ def predict(
     """
     logging.info("Initialize Dataset")
 
-    train_news_df = read_news_df(Path(MIND_LARGE_DATASET_DIR))
+    train_news_df = read_news_df(Path(EBREC_LARGE_DATASET_DIR))
     val_news_df = train_news_df
-    test_behavior_df = read_behavior_df(Path(MIND_TEST_DATASET_DIR),mode='test',history_size=history_size)
+    test_behavior_df = read_behavior_df(Path(EBREC_TEST_DATASET_DIR),mode='test',history_size=history_size)
 
 
     # test_behavior_df = test_behavior_df[:50]
@@ -184,7 +186,7 @@ def predict(
     """
     logging.info("Training Start")
 
-    newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-12_17-20-03/nrms_bce-embedding-base_v1.pth'))
+    newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-12_20-08-38/nrms_bce-embedding-base_v1.pth'))
 
     newsrec_net.eval()
 
@@ -193,7 +195,7 @@ def predict(
 
     logging.info({"device": device})
     pred_validation_list = []
-    for batch in tqdm(test_dataloader, desc="Predict for MINDValDataset"):
+    for batch in tqdm(test_dataloader, desc="Predict for EBRECValDataset"):
         # Inference
         for k in batch.keys():
             batch[k] = batch[k].to(device)

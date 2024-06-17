@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-
+os.environ['POLARS_MAX_THREADS'] = "8"
 import hydra
 import numpy as np
 import torch
@@ -23,8 +23,9 @@ from datetime import datetime
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 from ebrec.config.config import TrainConfig
-from ebrec.config.path import LOG_OUTPUT_DIR, MIND_SMALL_TRAIN_DATASET_DIR, MIND_SMALL_VAL_DATASET_DIR, \
-    MODEL_OUTPUT_DIR, MIND_SMALL_DATASET_DIR
+from ebrec.config.path import LOG_OUTPUT_DIR, EBREC_SMALL_TRAIN_DATASET_DIR, EBREC_SMALL_VAL_DATASET_DIR, \
+    MODEL_OUTPUT_DIR, EBREC_SMALL_DATASET_DIR, EBREC_LARGE_DATASET_DIR, EBREC_LARGE_TRAIN_DATASET_DIR, \
+    EBREC_LARGE_VAL_DATASET_DIR
 from ebrec.evaluation.RecEvaluator import RecEvaluator, RecMetrics
 from ebrec.data.EbrecDataset import EbrecTrainDataset,EbrecValDataset,EbrecTestDataset
 
@@ -33,7 +34,7 @@ from ebrec.models.newsrecv2.recommendation.npa import NPA, PLMBasedNewsEncoder a
 from ebrec.models.newsrecv2.recommendation.naml import NAML, PLMBasedNewsEncoder as NAMLNewsEncoder, UserEncoder as NAMLUserEncoder
 from ebrec.models.newsrecv2.recommendation import NewsRecommendationModel
 
-from ebrec.data.dataframe import read_behavior_df, read_news_df, create_user_ids_to_idx_map
+from ebrec.data.dataframe import read_behavior_df, read_news_df, create_user_ids_to_idx_map, read_train_dev_behavior_df
 
 from ebrec.utils.log_util import init_logger
 logging = init_logger(__name__)
@@ -51,17 +52,17 @@ class CustomCallback(TrainerCallback):
     ):
         logging.info(f"Epoch {state.epoch} finished")
 def evaluate(
-    net: torch.nn.Module, eval_mind_dataset: EbrecValDataset, device: torch.device
+    net: torch.nn.Module, eval_EBREC_dataset: EbrecValDataset, device: torch.device
 ) -> RecMetrics:
     net.eval()
 
     EVAL_BATCH_SIZE = 1
-    eval_dataloader = DataLoader(eval_mind_dataset, batch_size=EVAL_BATCH_SIZE, pin_memory=True)
+    eval_dataloader = DataLoader(eval_EBREC_dataset, batch_size=EVAL_BATCH_SIZE, pin_memory=True)
 
     val_metrics_list: list[RecMetrics] = []
 
     logging.info({"device": device})
-    for batch in tqdm(eval_dataloader, desc="Evaluation for MINDValDataset"):
+    for batch in tqdm(eval_dataloader, desc="Evaluation for EBRECValDataset"):
         # Inference
         for k in batch.keys():
             # logging.info('key {} {}'.format(k,batch[k]))
@@ -141,16 +142,20 @@ def train(
     """
     logging.info("Initialize Dataset")
 
-    train_news_df = read_news_df(Path(MIND_SMALL_DATASET_DIR))
-    train_behavior_df = read_behavior_df(Path(MIND_SMALL_TRAIN_DATASET_DIR),mode='train',history_size=history_size)
+    train_news_df = read_news_df(Path(EBREC_LARGE_DATASET_DIR))
+    train_behavior_df = read_behavior_df(Path(EBREC_LARGE_TRAIN_DATASET_DIR),mode='train',history_size=history_size)
     val_news_df = train_news_df
-    val_behavior_df = read_behavior_df(Path(MIND_SMALL_VAL_DATASET_DIR),mode='eval',history_size=history_size)
+    val_behavior_df = read_behavior_df(Path(EBREC_LARGE_VAL_DATASET_DIR),mode='eval',history_size=history_size,limit_size=5000)
 
-    train_behavior_df = train_behavior_df[:50]
-    val_behavior_df = val_behavior_df[:50]
+    train_behavior_df = train_behavior_df
+    val_behavior_df = val_behavior_df
+    logging.info('train_behavior_df size {}'.format(len(train_behavior_df)))
+    logging.info('val_behavior_df size {}'.format(len(val_behavior_df)))
+    logging.info('train_news_df size {}'.format(len(train_news_df)))
+    logging.info('val_news_df size {}'.format(len(val_news_df)))
 
 
-    user_ids_to_idx_map = create_user_ids_to_idx_map(train_behavior_df, val_behavior_df)
+    user_ids_to_idx_map = {}
 
     train_dataset = EbrecTrainDataset(
         train_behavior_df,
@@ -226,7 +231,7 @@ def train(
         num_train_epochs=epochs,
         remove_unused_columns=False,
         logging_dir=LOG_OUTPUT_DIR,
-        logging_steps=1,
+        logging_steps=500,
     )
 
     trainer = Trainer(
