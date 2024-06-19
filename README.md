@@ -1,3 +1,12 @@
+# 实验结果
+```
+1.基于train_v2.py训练large数据，两个版本：
+（1）large采样5w + 采用embedding层编码新闻，得分0.56
+（2）large全量数据 + 采用embedding层编码新闻，得分0.60
+
+
+
+```
 # 参考项目
 - https://github.com/yamanalab/gpt-augmented-news-recommendation (pytorch 版本的新闻推荐模型，使用了其中的models)
 - https://github.com/ebanalyse/ebnerd-benchmark (官方baseline-tf keras实现)
