@@ -143,7 +143,7 @@ def train(
     logging.info("Initialize Dataset")
 
     train_news_df = read_news_df(Path(EBREC_LARGE_DATASET_DIR))
-    train_behavior_df = read_behavior_df(Path(EBREC_LARGE_TRAIN_DATASET_DIR),mode='train',history_size=history_size)
+    train_behavior_df = read_behavior_df(Path(EBREC_LARGE_TRAIN_DATASET_DIR),mode='train',history_size=history_size,limit_size=1000000)
     val_news_df = train_news_df
     val_behavior_df = read_behavior_df(Path(EBREC_LARGE_VAL_DATASET_DIR),mode='eval',history_size=history_size,limit_size=5000)
 
@@ -211,7 +211,7 @@ def train(
         ).to(device, dtype=torch.bfloat16)
     else:
         raise Exception(f"Unknown news rec model: {news_recommendation_model}")
-
+    newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-15_19-48-30/nrms_bce-embedding-base_v1.pth'))
     """
     3. Train
     """
@@ -219,7 +219,8 @@ def train(
     training_args = TrainingArguments(
         output_dir=model_save_dir,
         logging_strategy="steps",
-        lr_scheduler_type="constant",
+        lr_scheduler_type="cosine",
+        warmup_ratio=0.05,
         weight_decay=weight_decay,
         optim="adamw_torch",
         evaluation_strategy="no",
@@ -231,7 +232,9 @@ def train(
         num_train_epochs=epochs,
         remove_unused_columns=False,
         logging_dir=LOG_OUTPUT_DIR,
-        logging_steps=500,
+        logging_steps=500
+
+
     )
 
     trainer = Trainer(

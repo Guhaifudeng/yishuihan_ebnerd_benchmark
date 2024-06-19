@@ -186,8 +186,9 @@ def predict(
     """
     logging.info("Training Start")
 
-    newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-12_20-08-38/nrms_bce-embedding-base_v1.pth'))
-
+    # newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-12_20-08-38/nrms_bce-embedding-base_v1.pth'))
+    #newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-12_20-08-38/nrms_bce-embedding-base_v1.pth'))
+    newsrec_net.load_state_dict(torch.load('/home/dev/ebnerd-benchmark/src/output/model/2024-06-15_19-48-30/nrms_bce-embedding-base_v1.pth'))
     newsrec_net.eval()
 
     test_dataloader = DataLoader(test_dataset, batch_size=1, pin_memory=True)
